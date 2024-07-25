@@ -1,0 +1,12 @@
+netcode-patch -nv 1.5.2 "C:\UnityProjects\HarbingerBehaviour\HarbingerBehaviour\bin\Debug\net7.0\\HarbingerBehaviour.dll" "C:\Program Files (x86)\Steam\steamapps\common\Lethal Company\Lethal Company_Data\Managed" "C:\Users\robin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\testing\BepInEx\plugins\Evaisa-LethalLib\LethalLib\LethalLib.dll" "C:\Users\robin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\testing\BepInEx\plugins\MMHOOK"
+
+
+<Compile Include="AICode\HarbingerAI.cs" />
+<Compile Include="AICode\SlimePatch.cs" />
+<Compile Include="AICode\TeleportRing.cs" />
+<Compile Include="Config.cs" />
+<Compile Include="HarbingerLoader.cs" />
+<Compile Include="SyncedInstance.cs" />
+
+
+netcode-patch -nv 1.5.2 "C:\Users\robin\source\repos\HarbingerBehaviourTest\ClassLibrary1\bin\Debug\net8.0\\ClassLibrary1.dll" "C:\Program Files (x86)\Steam\steamapps\common\Lethal Company\Lethal Company_Data\Managed" "C:\Users\robin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\testing\BepInEx\plugins\Evaisa-LethalLib\LethalLib\LethalLib.dll" "C:\Users\robin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\testing\BepInEx\plugins\MMHOOK"
