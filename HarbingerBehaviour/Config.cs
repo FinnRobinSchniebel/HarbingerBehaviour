@@ -22,6 +22,9 @@ namespace HarbingerBehaviour
         public readonly ConfigEntry<float> TPOtherCooldown;
         public readonly ConfigEntry<int> MaxCount;
         public readonly ConfigEntry<String> HarbingerSpawnLocations;
+        public readonly ConfigEntry<String> BlackList;
+        public readonly ConfigEntry<String> WhiteList;
+        public readonly ConfigEntry<bool> CanTPItems;
 
 
         public Config()
@@ -38,8 +41,12 @@ namespace HarbingerBehaviour
             TeleportSpeed = cfg.Bind("Teleport Enemies", "Teleportation speed multiplier", defaultValue: 1f, "How fast the telporation animation should play (default 1 -> 3.35 Sec)");
             TPOtherCooldown = cfg.Bind("Teleport Enemies", "Teleport Enemies Cooldown", defaultValue: 10f, "How frequantly should the harbinger teleport enemies to players (default 15 sec). Minimum of 10 seconds");
             TPSelfCooldown = cfg.Bind("Teleport Self", "Teleport Self Cooldown", defaultValue: 20f, "How frequantly should the harbinger teleport to players (default 20 sec). Minimum of 5 seconds");
-            MaxCount = cfg.Bind("Spawning", "Maximum Harbingers", defaultValue: 2, "What is the maximum number of harbingers that should be able to spawn (defaut 2)");
-            HarbingerSpawnLocations = cfg.Bind("Spawning", "Moon Spawn Weight", "Modded:25,ExperimentationLevel:10,AssuranceLevel:10,VowLevel:10,OffenseLevel:20,MarchLevel:20,RendLevel:40,DineLevel:40,TitanLevel:50,AdamanceLevel:20,EmbrionLevel:20,ArtificeLevel:50", "Rarety of Harbinger spawning on Each Moon (works will LLL as well).");
+            MaxCount = cfg.Bind("Spawning", "Maximum Harbingers", defaultValue: 1, "What is the maximum number of harbingers that should be able to spawn (defaut 1)");
+            HarbingerSpawnLocations = cfg.Bind("Spawning", "Moon Spawn Weight", "Modded:35,ExperimentationLevel:10,AssuranceLevel:10,VowLevel:10,OffenseLevel:20,MarchLevel:20,RendLevel:40,DineLevel:40,TitanLevel:50,AdamanceLevel:20,EmbrionLevel:20,ArtificeLevel:50", "Rarety of Harbinger spawning on Each Moon (works will LLL as well).");
+            BlackList = cfg.Bind("Teleport Enemies", "Teleportation BlackList", "none", "Add the names of the entities that should not be teleported (This must be the internal name of the entities). Make sure to separate each name with a comma and a space (PjonkGoose, Harbinger)");
+            WhiteList = cfg.Bind("Teleport Enemies", "Teleportation WhiteList", "none", "An alternative to the blacklist. If this value is not default it will only teleport enemies that are part of the whitelist.");
+            CanTPItems = cfg.Bind("Teleport Items", "Can Teleport Items", defaultValue: true, "This allows you to turn off the ability to teleport the apparatus.");
+
         }
 
         public static void RequestSync()

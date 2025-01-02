@@ -33,6 +33,8 @@ namespace HarbingerBehaviour
 
         private static EnemyType VoidHarbinger;
 
+        public static String[] BlacklistNames;
+        public static String[] WhitelistNames;
 
         void Awake()
         {
@@ -99,8 +101,16 @@ namespace HarbingerBehaviour
             LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(VoidHarbinger.enemyPrefab);
              
             var (SpawnRateLevelType, SpawnRateCustom) = ConfigParsing(SyncedInstance<Config>.Instance.HarbingerSpawnLocations.Value);
-            
+            BlacklistNames = ParseBlacklist(SyncedInstance<Config>.Instance.BlackList.Value);
+            WhitelistNames = ParseBlacklist(SyncedInstance<Config>.Instance.WhiteList.Value);
+            if (!WhitelistNames.Contains("none"))
+            {
+                mls.LogWarning("WhiteList active. Blacklist Disabled");
+            }
+
             Enemies.RegisterEnemy(VoidHarbinger, SpawnRateLevelType, SpawnRateCustom, TNode, TerminalKeyword);
+
+
         }
         private static (Dictionary<Levels.LevelTypes, int> spawnRateByLevelType, Dictionary<string, int> spawnRateByCustomLevelType) ConfigParsing(string configMoonRarity)
         {
@@ -131,7 +141,16 @@ namespace HarbingerBehaviour
             }
             return (spawnRateByLevelType: spawnRateByLevelType, spawnRateByCustomLevelType: spawnRateByCustomLevelType);
         }
-
+        private static String[] ParseBlacklist(String list)
+        {
+            string[] l = list.Split(",");
+           
+            for (int i =0; i < l.Length; i++)
+            {
+                l[i] = l[i].ToLower().Trim();
+            }
+            return l;
+        }
 
     }
 }

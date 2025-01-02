@@ -25,7 +25,7 @@ namespace HarbingerBehaviour.AICode
         public EnemyAI Teleport;
 
         public Vector3 EnemyLocation;
-
+        public HarbingerAI HarbingerOwner;
 
         public void setup(EnemyAI ToTeleport, Vector3 Location)
         {
@@ -48,19 +48,8 @@ namespace HarbingerBehaviour.AICode
             {
                 if (c.CompareTag("Player") && c.GetComponent<PlayerControllerB>().IsOwner)
                 {
-                    NavMeshHit hit = new NavMeshHit();
-                    float maxDistance = 2.0f;
-
-                    int tries = 0;
-                    while (!hit.hit && tries < 15)
-                    {
-                        //Vector3 target = EnemyLocation + new Vector3(UnityEngine.Random.Range(.01f, .5f), 0, UnityEngine.Random.Range(.01f, .5f));
-                        Vector2 RandomPoint = UnityEngine.Random.insideUnitCircle.normalized.normalized * UnityEngine.Random.Range(1, 2);
-                        Vector3 TpPos = EnemyLocation + new Vector3(RandomPoint.x, 0, RandomPoint.y);
-
-                        NavMesh.SamplePosition(TpPos, out hit, maxDistance, NavMesh.AllAreas);
-                        tries++;
-                    }
+                    NavMeshHit hit = HarbingerOwner.FindMoveLocation(EnemyLocation, new Vector2(1,2), 15);
+                    
                     if (hit.hit)
                     {
                         StartCoroutine(TeleportPlayer(c, hit.position));
