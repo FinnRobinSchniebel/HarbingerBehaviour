@@ -11,6 +11,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Rendering;
+using UnityEngine.VFX;
 using static UnityEngine.GraphicsBuffer;
 
 namespace HarbingerBehaviour.AICode
@@ -24,6 +25,7 @@ namespace HarbingerBehaviour.AICode
             Teleporting,
             TeleportingSelf,
             TeleportItem,
+            stunned,
         }
 
         private Vector3 mainEntrancePosition; //usefull later when I add the crown (maybe)
@@ -77,6 +79,16 @@ namespace HarbingerBehaviour.AICode
         private static List<GrabbableObject> grabbableObjectsInMap = new List<GrabbableObject>();
         private float startTeleporItemTimer = 0;
 
+        [Header("Stuned")]
+        public Material StunnMaterial;
+        private float LastAnimationSpeed = 0;
+        private Material[] TempMaterial;
+        public VisualEffect[] EffectsToPause;
+        public Light[] LightsToTurnOff;
+        public Rigidbody RigidStun;
+        public CapsuleCollider RigidCollider;
+        public Vector3 prestunTransform;
+        public Quaternion prestunRot;
         public override void Start()
         {
 
@@ -95,7 +107,21 @@ namespace HarbingerBehaviour.AICode
             HostConfigApply(SyncedInstance<Config>.Instance.TeleportSpeed.Value, Math.Max(SyncedInstance<Config>.Instance.TPSelfCooldown.Value, 5), Math.Max(SyncedInstance<Config>.Instance.TPOtherCooldown.Value, 5));
             nPath = new NavMeshPath();
 
+            rigidDisableClientRpc();
+
             RefreshGrabbableObjectsInMapList();
+        }
+
+        [ClientRpc]
+        public void rigidDisableClientRpc()
+        {
+            RigidStun.isKinematic = true;
+            
+            RigidStun.useGravity = false;
+            
+            prestunTransform = RigidStun.transform.localPosition;
+            prestunRot = RigidStun.transform.localRotation;
+
         }
 
         public static void RefreshGrabbableObjectsInMapList()
@@ -148,6 +174,10 @@ namespace HarbingerBehaviour.AICode
                 return;
             }
             if (!RoundManager.Instance.IsHost)
+            {
+                return;
+            }
+            if (state == HarbingerStates.stunned)
             {
                 return;
             }
@@ -297,6 +327,18 @@ namespace HarbingerBehaviour.AICode
             {
                 startTeleporItemTimer = Math.Max(0, startTeleporItemTimer - Time.deltaTime);
             }
+            if(stunNormalizedTimer > 0f && state != HarbingerStates.stunned)
+            {
+                NewStateClientRpc(HarbingerStates.stunned);
+                HarbingerLoader.mls.LogWarning("In possition");
+            }
+            
+            if(state != HarbingerStates.stunned && ( Vector3.Distance(RigidStun.transform.localPosition, prestunTransform) > 0.001f || Quaternion.Angle(RigidStun.transform.localRotation, prestunRot) > 0.001f))
+            {               
+                RigidStun.transform.localPosition = Vector3.MoveTowards(RigidStun.transform.localPosition, prestunTransform, .5f*Time.deltaTime);
+                RigidStun.transform.localRotation = Quaternion.RotateTowards(RigidStun.transform.localRotation, prestunRot, 120f * Time.deltaTime);
+            }
+
 
             switch (state) 
             { 
@@ -329,7 +371,6 @@ namespace HarbingerBehaviour.AICode
                             HarbingerLoader.mls.LogWarning("In possition");
                             StartTeleportEffectsClientRpc();
                             SwitchToBehaviourState(2);
-                            //StartCoroutine(TimeTP());
 
                         }
                         else
@@ -342,6 +383,14 @@ namespace HarbingerBehaviour.AICode
                     break;
                 case HarbingerStates.TeleportingSelf:
                     break;
+                case HarbingerStates.stunned:
+                    if(stunNormalizedTimer <= 0f)
+                    {
+                        
+                        NewStateClientRpc(HarbingerStates.Standing);
+                    }
+                    
+                    break;
                 default:
                     break;
 
@@ -350,11 +399,7 @@ namespace HarbingerBehaviour.AICode
 
         }
 
-        public IEnumerator TimeTP()
-        {
-            yield return new WaitForSeconds(6.25f);
-            TeleportEvent();
-        }
+        
 
         public void TeleportItem()
         {
@@ -451,7 +496,18 @@ namespace HarbingerBehaviour.AICode
                 TeleportValid = false;
                 Alreadyused.Clear();
             }
-
+            if(newstate == HarbingerStates.stunned)
+            {
+                if(state == HarbingerStates.Teleporting && tpRing.enabled == true)
+                {
+                    tpRing.Cancel();
+                }
+            }
+            if(state == HarbingerStates.stunned && newstate != HarbingerStates.stunned)
+            {
+                StunClientRpc(false);
+            }
+            
             state = newstate;
             ActionStart = Time.time;
 
@@ -509,10 +565,75 @@ namespace HarbingerBehaviour.AICode
 
                     
                     break;
+                case HarbingerStates.stunned:
+                    StunClientRpc(true);                    
+                    break;
                 default:
                     break;
 
             }
+        }
+
+        [ClientRpc]
+        public void StunClientRpc(bool isStunned)
+        {
+            if (isStunned)
+            {
+                HarbingerLoader.mls.LogInfo("Harbinger stunned for: " + (stunNormalizedTimer * enemyType.stunTimeMultiplier));
+                LastAnimationSpeed = creatureAnimator.speed;
+                creatureAnimator.speed = 0f;
+                agent.speed = 0;
+                Material[] TempMat = skinnedMeshRenderers[0].materials;
+                TempMaterial = new Material[TempMat.Length];
+                TempMat.CopyTo(TempMaterial, 0);
+                TempMat[0] = StunnMaterial;
+                skinnedMeshRenderers[0].materials = TempMat;
+
+                eye.GetComponent<MeshRenderer>().enabled = false;
+                EffectsToPause[2].Reinit();
+                foreach (VisualEffect e in EffectsToPause)
+                {
+                    e.Stop();
+                }
+                
+                foreach( Light l in LightsToTurnOff)
+                {
+                    l.enabled = false;
+                }
+                //rigid
+                prestunTransform = RigidStun.transform.localPosition;
+                prestunRot = RigidStun.transform.localRotation;
+                
+                RigidStun.isKinematic = false;                     
+                RigidStun.useGravity = true;
+
+
+                StopAllCoroutines();
+            }
+            else
+            {
+                agent.speed = movementspeed;
+                skinnedMeshRenderers[0].materials = TempMaterial;
+
+                eye.GetComponent<MeshRenderer>().enabled = true;
+                foreach (VisualEffect e in EffectsToPause)
+                {
+                    e.Play();
+                }
+                foreach (Light l in LightsToTurnOff)
+                {
+                    l.enabled = true;
+                }
+                creatureAnimator.speed = LastAnimationSpeed;
+                //rigid
+                //RigidStun.transform.localPosition = prestunTransform;
+                //RigidStun.transform.localRotation = prestunRot;
+
+                RigidStun.isKinematic = true;                
+                RigidStun.useGravity = false;
+                
+            }
+            
         }
 
         private IEnumerator TeleportSelf()
@@ -529,7 +650,7 @@ namespace HarbingerBehaviour.AICode
                 {
                     validTeleportPlayers.Add(a.transform);
                 }
-            }            
+            }
 
             if (RoundManager.Instance.IsHost)
             {
@@ -677,6 +798,7 @@ namespace HarbingerBehaviour.AICode
             return hit;
         }
 
+        //called by animation
         public void TeleportEvent()
         {
             if (!RoundManager.Instance.IsHost)
