@@ -89,6 +89,7 @@ namespace HarbingerBehaviour.AICode
         public CapsuleCollider RigidCollider;
         public Vector3 prestunTransform;
         public Quaternion prestunRot;
+        public SkinnedMeshRenderer Smr;
         public override void Start()
         {
 
@@ -98,18 +99,25 @@ namespace HarbingerBehaviour.AICode
             TeleportRandom = new System.Random(StartOfRound.Instance.randomMapSeed + thisEnemyIndex);
             mainEntrancePosition = RoundManager.FindMainEntrancePosition();
             ActionStart = Time.time;
-            
+             
             lastTeleportTime = Time.time;
             PositionBeforeSelfTeleport.transform.SetParent(this.transform.transform.parent);
             tpRing.transform.SetParent(this.transform.transform.parent);
             tpRing.HarbingerOwner = this;
+            nPath = new NavMeshPath();
+            rigidDisableClientRpc();
+            RefreshGrabbableObjectsInMapList();
+
+            if (!RoundManager.Instance.IsHost)
+            {
+                return;
+            }
+
             HarbingerLoader.mls.LogWarning("Testing TP Speed: " + SyncedInstance<Config>.Instance.TPSelfCooldown.Value);
             HostConfigApply(SyncedInstance<Config>.Instance.TeleportSpeed.Value, Math.Max(SyncedInstance<Config>.Instance.TPSelfCooldown.Value, 5), Math.Max(SyncedInstance<Config>.Instance.TPOtherCooldown.Value, 5));
-            nPath = new NavMeshPath();
+            
 
-            rigidDisableClientRpc();
-
-            RefreshGrabbableObjectsInMapList();
+            
         }
 
         [ClientRpc]
@@ -543,6 +551,10 @@ namespace HarbingerBehaviour.AICode
                     SwitchToBehaviourState(4);
                     startTeleporItemTimer = 0.5f;
                     agent.speed = movementspeed + 2;
+                    if (!RoundManager.Instance.IsHost)
+                    {
+                        return;
+                    }
                     //NavMeshHit h = FindMoveLocation(transform.position, MinMaxMovement, 50, 1);
                     Ray r = new Ray(LungProp.transform.position, Vector3.down);
                     RaycastHit Rhit;
@@ -583,11 +595,11 @@ namespace HarbingerBehaviour.AICode
                 LastAnimationSpeed = creatureAnimator.speed;
                 creatureAnimator.speed = 0f;
                 agent.speed = 0;
-                Material[] TempMat = skinnedMeshRenderers[0].materials;
+                Material[] TempMat = Smr.materials;
                 TempMaterial = new Material[TempMat.Length];
                 TempMat.CopyTo(TempMaterial, 0);
                 TempMat[0] = StunnMaterial;
-                skinnedMeshRenderers[0].materials = TempMat;
+                Smr.materials = TempMat;
 
                 eye.GetComponent<MeshRenderer>().enabled = false;
                 EffectsToPause[2].Reinit();
@@ -613,7 +625,7 @@ namespace HarbingerBehaviour.AICode
             else
             {
                 agent.speed = movementspeed;
-                skinnedMeshRenderers[0].materials = TempMaterial;
+                Smr.materials = TempMaterial;
 
                 eye.GetComponent<MeshRenderer>().enabled = true;
                 foreach (VisualEffect e in EffectsToPause)
