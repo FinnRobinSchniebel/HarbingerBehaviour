@@ -11,9 +11,11 @@ using BepInEx.Configuration;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using UnityEngine.Assertions;
+using HarbingerBehaviour.Items;
 
-namespace HarbingerBehaviour
-{ 
+namespace HarbingerBehaviour.ConfigSync
+{
     [BepInPlugin(GUID, NAME, VERSION)]
     public class HarbingerLoader : BaseUnityPlugin
     {
@@ -24,17 +26,19 @@ namespace HarbingerBehaviour
 
         public static Config HarbConfig;
 
-        private static HarbingerLoader Inst;
+        public static HarbingerLoader Inst;
         internal static ManualLogSource mls;
 
         public static AssetBundle HarbBundle;
 
         public static int SpawnWeight = 25;
 
-        private static EnemyType VoidHarbinger;
+        public static EnemyType VoidHarbinger;
+        public static GameObject HarbingerFractur;
+        public static Item RealityFragment;
 
-        public static String[] BlacklistNames;
-        public static String[] WhitelistNames;
+        public static string[] BlacklistNames;
+        public static string[] WhitelistNames;
 
         void Awake()
         {
@@ -48,17 +52,29 @@ namespace HarbingerBehaviour
             HarbBundle = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "harbinger"));
 
             VoidHarbinger = HarbBundle.LoadAsset<EnemyType>("Assets/LethalCompany/Mods/Harbinger/Harbinger_enemyType.asset");
-            
-            if(VoidHarbinger == null)
+            HarbingerFractur = HarbBundle.LoadAsset<GameObject>("Assets/LethalCompany/Mods/Harbinger/HarbingerFracture.prefab");
+            RealityFragment = HarbBundle.LoadAsset<Item>("Assets/LethalCompany/Mods/Harbinger/RealityFractureItem.asset");
+
+
+            if (VoidHarbinger == null)
             {
-                mls.LogError("EnemyType Missing...");
+                mls.LogError("Harbinger Missing...");
             }
-            
+            if (HarbingerFractur == null)
+            {
+                mls.LogError("Fracture Missing...");
+            }
+            if (RealityFragment == null)
+            {
+                mls.LogError("Fragment Missing...");
+            }
+
             harmony.PatchAll(typeof(HarbingerAI));
+            harmony.PatchAll(typeof(SpaceFractureEnemy));
             harmony.PatchAll(typeof(TeleportRing));
             harmony.PatchAll(typeof(Config));
 
-            HarbConfig = new Config(base.Config);
+            HarbConfig = new Config(Config);
             SetharbValues();
             mls.LogInfo("Patching Networking...");
 
@@ -87,7 +103,7 @@ namespace HarbingerBehaviour
             TerminalNode TNode = HarbBundle.LoadAsset<TerminalNode>("Assets/LethalCompany/Mods/Harbinger/HarbingerFile.asset");
             TerminalKeyword TerminalKeyword = HarbBundle.LoadAsset<TerminalKeyword>("Assets/LethalCompany/Mods/Harbinger/Harbinger.asset");
 
-            VoidHarbinger.MaxCount = SyncedInstance<Config>.Instance.MaxCount.Value;
+            
 
             if (TerminalKeyword == null)
             {
@@ -97,12 +113,41 @@ namespace HarbingerBehaviour
             {
                 mls.LogError("Keyword Missing...");
             }
+            //VoidHarbinger.MaxCount = SyncedInstance<Config>.Instance.MaxCount.Value;
+            //VoidHarbinger.canDie = SyncedInstance<Config>.Instance.HarbingerCanDie.Value;
+
+            /*HarbingerAI harbingerAI = VoidHarbinger.enemyPrefab.GetComponent<HarbingerAI>();
+            //harbingerAI.enemyHP = SyncedInstance<Config>.Instance.HarbingerHealth.Value;
+            harbingerAI.enemyHP = SyncedInstance<Config>.Instance.HarbingerHealth.Value;
+            harbingerAI.CanTeleportSelf = SyncedInstance<Config>.Instance.CanTeleportSelf.Value;
+            harbingerAI.RandomTeleport = SyncedInstance<Config>.Instance.TeleportRandom.Value;
+            harbingerAI.teleportOnContact = SyncedInstance<Config>.Instance.TpOnHarbingerTouch.Value;
+
+            harbingerAI.CanCreateFractures = SyncedInstance<Config>.Instance.CanCreateFractures.Value;
+            harbingerAI.AllowedSimultaneousFractures = SyncedInstance<Config>.Instance.SimultaneousFractures.Value;
+            harbingerAI.CanTeleportSelf = SyncedInstance<Config>.Instance.CanTeleportSelf.Value;
+
+            SpaceFractureEnemy spaceFractureEnemy = HarbingerFractur.GetComponent<SpaceFractureEnemy>();
+            spaceFractureEnemy.NeededStunDuration = SyncedInstance<Config>.Instance.StunDuration.Value;
+            spaceFractureEnemy.enemyType.stunGameDifficultyMultiplier = SyncedInstance<Config>.Instance.ShockDifficulty.Value;
+            spaceFractureEnemy.dropChance = SyncedInstance<Config>.Instance.RealityFractureChance.Value;
+
+            RealityFragment.minValue = SyncedInstance<Config>.Instance.MinFractureValue.Value;
+            RealityFragment.maxValue = SyncedInstance<Config>.Instance.MaxFractureValue.Value;
+            RealityFragment.spawnPrefab.GetComponent<RealityFracture>().useCooldown = SyncedInstance<Config>.Instance.FractureCooldown.Value;
+            RealityFragment.spawnPrefab.GetComponent<RealityFracture>().DamagePlayer = SyncedInstance<Config>.Instance.FractureDamageDelt.Value;*/
 
             LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(VoidHarbinger.enemyPrefab);
-             
+            LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(HarbingerFractur);
+            LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(RealityFragment.spawnPrefab);
+            Utilities.FixMixerGroups(RealityFragment.spawnPrefab);
+
             var (SpawnRateLevelType, SpawnRateCustom) = ConfigParsing(SyncedInstance<Config>.Instance.HarbingerSpawnLocations.Value);
             BlacklistNames = ParseBlacklist(SyncedInstance<Config>.Instance.BlackList.Value);
             WhitelistNames = ParseBlacklist(SyncedInstance<Config>.Instance.WhiteList.Value);
+
+
+
             if (!WhitelistNames.Contains("none"))
             {
                 mls.LogWarning("WhiteList active. Blacklist Disabled");
@@ -139,13 +184,13 @@ namespace HarbingerBehaviour
                     }
                 }
             }
-            return (spawnRateByLevelType: spawnRateByLevelType, spawnRateByCustomLevelType: spawnRateByCustomLevelType);
+            return (spawnRateByLevelType, spawnRateByCustomLevelType);
         }
-        private static String[] ParseBlacklist(String list)
+        private static string[] ParseBlacklist(string list)
         {
             string[] l = list.Split(",");
-           
-            for (int i =0; i < l.Length; i++)
+
+            for (int i = 0; i < l.Length; i++)
             {
                 l[i] = l[i].ToLower().Trim();
             }

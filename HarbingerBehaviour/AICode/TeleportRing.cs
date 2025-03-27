@@ -39,7 +39,14 @@ namespace HarbingerBehaviour.AICode
         {
 
             EnemyLocation = Teleport.transform.position;
+            Quaternion rot = Teleport.transform.rotation;
             TeleportCreature(Teleport);
+
+            if(!HarbingerOwner.CanTeleportSelf && HarbingerOwner.CanCreateFractures && RoundManager.Instance.IsHost)
+            {
+                HarbingerOwner.CreateFracture(EnemyLocation, rot, Teleport.transform.position);
+            }
+
 
             LayerMask layerMask = LayerMask.GetMask("Player");
             Collider[] playersInRange = Physics.OverlapCapsule(Container.transform.position, Container.transform.position, 3f, layerMask);
@@ -57,6 +64,7 @@ namespace HarbingerBehaviour.AICode
                     
                 }
             }
+
 
         }
 
@@ -77,7 +85,7 @@ namespace HarbingerBehaviour.AICode
         {
             if (FinishSound)
             {
-                FinishSound.Play();
+                FinishSound.PlayOneShot(FinishSound.clip);
             }
             StartCoroutine(Deactivate());
         }

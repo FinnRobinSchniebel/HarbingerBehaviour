@@ -1,5 +1,6 @@
 ﻿using BepInEx.Configuration;
 using GameNetcodeStuff;
+using HarbingerBehaviour.ConfigSync;
 using HarmonyLib;
 using System;
 using System.Collections;
@@ -55,11 +56,13 @@ namespace HarbingerBehaviour.AICode
         [Header("Teleport Other")]
         public TeleportRing tpRing;
         public float TPOtherCooldown = 15f;
+        
         private float TPOtherInitCooldown;
         private System.Random TeleportRandom;
         private bool TeleportValid = false;
         private bool aligned = false;
         private Quaternion lookRotation;
+        
         
         [Header("TeleportSelf")]
         public Vector2 TeleportSelfArriveRadius = new Vector2(4, 6);
@@ -75,7 +78,6 @@ namespace HarbingerBehaviour.AICode
         public GrabbableObject LungProp;
         public float ResetToStealCooldown = 5;
         public float StealCooldown = 5;
-        public ItemCollider IC;
         private static List<GrabbableObject> grabbableObjectsInMap = new List<GrabbableObject>();
         private float startTeleporItemTimer = 0;
 
@@ -90,6 +92,26 @@ namespace HarbingerBehaviour.AICode
         public Vector3 prestunTransform;
         public Quaternion prestunRot;
         public SkinnedMeshRenderer Smr;
+        public GameObject harbingerMapNode;
+
+        [Header("HarbingerFractures")]
+        public GameObject FracturGameObject;
+        public bool CanCreateFractures = true;
+        //public bool CanDie = true;
+        public List<SpaceFractureEnemy> FractureRef;
+        public int DestroyedFractures = 0;
+        public int NumberOfFracturesToKill = 3;
+        public int AllowedSimultaneousFractures = 3;
+        //public bool ReduceAllowedPerDestroyed = true;
+        int MaxHealth = 3;
+
+        [Header("Extra Configurations")]
+        public bool RandomTeleport = false;
+        public bool teleportOnContact = true;
+        public bool CanTeleportSelf = true;
+
+
+
         public override void Start()
         {
 
@@ -99,14 +121,17 @@ namespace HarbingerBehaviour.AICode
             TeleportRandom = new System.Random(StartOfRound.Instance.randomMapSeed + thisEnemyIndex);
             mainEntrancePosition = RoundManager.FindMainEntrancePosition();
             ActionStart = Time.time;
-             
+            NumberOfFracturesToKill = enemyHP;
             lastTeleportTime = Time.time;
             PositionBeforeSelfTeleport.transform.SetParent(this.transform.transform.parent);
             tpRing.transform.SetParent(this.transform.transform.parent);
             tpRing.HarbingerOwner = this;
             nPath = new NavMeshPath();
+            MaxHealth = enemyHP;
             rigidDisableClientRpc();
             RefreshGrabbableObjectsInMapList();
+
+            enemyHP = SyncedInstance<Config>.Instance.HarbingerHealth.Value;
 
             if (!RoundManager.Instance.IsHost)
             {
@@ -165,6 +190,17 @@ namespace HarbingerBehaviour.AICode
 
             Destroy(tpRing.gameObject);
             Destroy(PositionBeforeSelfTeleport.gameObject);
+            if (!RoundManager.Instance.IsHost)
+            {
+                return;
+            }
+
+            while (FractureRef.Count > 0)
+            {
+                FractureRef[0].KillEnemy(true);
+                FractureRef.Remove(FractureRef[0]);
+            }
+
         }
 
         public override void DoAIInterval()
@@ -185,7 +221,7 @@ namespace HarbingerBehaviour.AICode
             {
                 return;
             }
-            if (state == HarbingerStates.stunned)
+            if (state == HarbingerStates.stunned || isEnemyDead)
             {
                 return;
             }
@@ -232,7 +268,7 @@ namespace HarbingerBehaviour.AICode
 
 
             //only enter if the player is not teleporting something else and the cooldown is finished
-            if (state != HarbingerStates.Teleporting && SelfTeleportCooldown == 0)
+            if (state != HarbingerStates.Teleporting && SelfTeleportCooldown == 0 && CanTeleportSelf)
             {
                 
                 //self Teleport if a player is to far away & in the facility
@@ -318,6 +354,10 @@ namespace HarbingerBehaviour.AICode
         public override void Update()
         {
             base.Update();
+            if (isEnemyDead)
+            {
+                return;
+            }
             if(StealCooldown > 0)
             {
                 StealCooldown = Math.Max(0, StealCooldown - Time.deltaTime);
@@ -573,8 +613,8 @@ namespace HarbingerBehaviour.AICode
                     else
                     {
                         HarbingerLoader.mls.LogWarning("Cant Find Location");
+                        NewStateClientRpc(HarbingerStates.Standing);
                     }
-
                     
                     break;
                 case HarbingerStates.stunned:
@@ -612,13 +652,18 @@ namespace HarbingerBehaviour.AICode
                 {
                     l.enabled = false;
                 }
+                if (harbingerMapNode != null)
+                {
+                    harbingerMapNode.GetComponent<MeshRenderer>().enabled = false;
+                }
+                
                 //rigid
                 prestunTransform = RigidStun.transform.localPosition;
                 prestunRot = RigidStun.transform.localRotation;
                 
                 RigidStun.isKinematic = false;                     
                 RigidStun.useGravity = true;
-
+                
 
                 StopAllCoroutines();
             }
@@ -626,8 +671,17 @@ namespace HarbingerBehaviour.AICode
             {
                 agent.speed = movementspeed;
                 Smr.materials = TempMaterial;
+                //corrects the material if a fractur was destroyed during a stun
+                if(Smr.materials != null)
+                {
+                    Smr.materials[0].SetFloat("_Damage", 1f - (float)enemyHP / MaxHealth);
+                }
 
                 eye.GetComponent<MeshRenderer>().enabled = true;
+                if (harbingerMapNode != null)
+                {
+                    harbingerMapNode.GetComponent<MeshRenderer>().enabled = true;
+                }
                 foreach (VisualEffect e in EffectsToPause)
                 {
                     e.Play();
@@ -641,11 +695,22 @@ namespace HarbingerBehaviour.AICode
                 //RigidStun.transform.localPosition = prestunTransform;
                 //RigidStun.transform.localRotation = prestunRot;
 
+
+
                 RigidStun.isKinematic = true;                
                 RigidStun.useGravity = false;
+                StartCoroutine(RepositionTimeout());
                 
             }
             
+        }
+
+        private IEnumerator RepositionTimeout()
+        {
+            yield return new WaitForSeconds(15f);
+            if((Vector3.Distance(RigidStun.transform.localPosition, prestunTransform) > 0.001f)){
+                RigidStun.transform.localPosition = prestunTransform;
+            }
         }
 
         private IEnumerator TeleportSelf()
@@ -686,6 +751,8 @@ namespace HarbingerBehaviour.AICode
                 NavMeshHit h = FindMoveLocation(tpLocation, TeleportSelfArriveRadius, 15, 1, true, 2f);
                 if (h.hit)
                 {
+                    Vector3 LastPos = transform.position;
+                    Quaternion LastRot = transform.rotation;
                     LastLocationUpdateClientRpc(transform.position); //, validTeleportPlayers[player].NetworkObjectId
                     SwitchToBehaviourState(3);
                     yield return new WaitForSeconds(.1f);
@@ -696,7 +763,10 @@ namespace HarbingerBehaviour.AICode
                     {
                         TPOtherCooldown = 1f;
                     }
-                    
+                    if (CanCreateFractures)
+                    {
+                        CreateFracture(LastPos, LastRot, transform.position);
+                    }
                     
                 }
                 
@@ -729,7 +799,7 @@ namespace HarbingerBehaviour.AICode
             }
 
             yield return new WaitForSeconds(.5f);
-            List<EnemyAI> validEnemies = new List<EnemyAI>();
+            List<EnemyAI> validEnemies = new List<EnemyAI>(); 
             foreach(EnemyAI Ai in RoundManager.Instance.SpawnedEnemies){
                 if (Ai.isOutside == this.isOutside && !Ai.isEnemyDead && Vector3.Distance(Ai.transform.position, transform.position) > 20f && MonsterBlackList(Ai)) 
                 {
@@ -759,6 +829,7 @@ namespace HarbingerBehaviour.AICode
 
             //give all clients the same enemy and location
             SettUpTPClientRpc(a.NetworkObjectId, h.position);
+
 
             Vector3 RotateToTeleportionDirection = (tpRing.transform.position - agent.transform.position).normalized;
             RotateToTeleportionDirection.y = 0;
@@ -859,7 +930,16 @@ namespace HarbingerBehaviour.AICode
             {
                 return;
             }
-            List<EnemyAI> validEnemies = new List<EnemyAI>();
+            if (RandomTeleport)
+            {
+               RandomLocationTeleport(playerWhoHit);
+            }
+            else
+            {
+                PlayerToMonsterTeleport(playerWhoHit);
+            }
+
+            /*List<EnemyAI> validEnemies = new List<EnemyAI>();
             foreach (EnemyAI Ai in RoundManager.Instance.SpawnedEnemies)
             {
                 if (Ai.isOutside == this.isOutside && !Ai.isEnemyDead && Vector3.Distance(Ai.transform.position, transform.position) > 10f)
@@ -904,15 +984,23 @@ namespace HarbingerBehaviour.AICode
             else
             {
                 playerWhoHit.TeleportPlayer(ChooseFarthestNodeFromPosition(mainEntrancePosition).position, false);
-            }
+            }*/
             
         }
 
         public static bool MonsterBlackList(EnemyAI toTest)
         {
+            if(toTest is SpaceFractureEnemy)
+            {
+                return false;
+            }
             if (!HarbingerLoader.WhitelistNames.Contains("none"))
             {
                 return MonsterWhiteList(toTest);
+            }
+            if (toTest.agent == null)
+            {
+                return false;
             }
             if (toTest == null)
             {
@@ -927,7 +1015,7 @@ namespace HarbingerBehaviour.AICode
                 return false;
             }
             else if ( HarbingerLoader.BlacklistNames.Contains( StandardiesMonsterNames(toTest.enemyType.enemyName) ) )
-            {                
+            { 
                 return false;
             }
             else
@@ -952,32 +1040,214 @@ namespace HarbingerBehaviour.AICode
 
 
 
-        /*public Vector3 randomNewPoint(Vector2 radMinMax, Transform AtPoint)
+
+        ///Section for Fractures
+        ///
+        
+
+        public void CreateFracture(Vector3 position, Quaternion rotation, Vector3 ExitPosition)
         {
-            float radius = Mathf.Lerp(radMinMax.x, radMinMax.y, (float)enemyRandom.NextDouble());
-            NextPos.transform.position = AtPoint.position;
-            NextPos.transform.rotation = AtPoint.rotation;
-
-            float direction = Mathf.Lerp(0, 360, (float)enemyRandom.NextDouble());
-
-            NextPos.transform.Rotate(0f, direction, 0f);
-            NextPos.transform.Translate(0, Mathf.Lerp(-2, 2, (float)enemyRandom.NextDouble()), radius);
-
-            if(debugPoint != null)
+            //check distance from all others
+            foreach( SpaceFractureEnemy f in FractureRef)
             {
-                debugPoint.transform.position = NextPos.transform.position;
+                if (Vector3.Distance(position, f.transform.position) < 10f)
+                {
+                    return;
+                }
             }
+            //check if max has been reached
+            if(AllowedSimultaneousFractures <= FractureRef.Count() && FractureRef.Count() != 0)
+            {
+                FractureRef[0].thisNetworkObject.Despawn(true);
+                FractureRef.RemoveAt(0);
+            }
+            //create fractur, change its parent
+            GameObject fractObj = Instantiate(FracturGameObject, position, rotation, this.transform.parent);
+            fractObj.GetComponent<NetworkObject>().Spawn();
 
-            return NextPos.transform.position;
+            SpaceFractureEnemy SpaceFrac = fractObj.GetComponent<SpaceFractureEnemy>();
+            SpaceFrac.OwnedBy = this;
+            SpaceFrac.ExitPosition = ExitPosition;
+            FractureRef.Add(SpaceFrac);
+
         }
 
-        public NavMeshHit clossetLocation(Vector3 target, float maxDistance = 2)
+        public void FracturDestroyed(SpaceFractureEnemy DestroyedFracture)
         {
-            NavMeshHit hit;
-            NavMesh.SamplePosition(target, out hit, maxDistance, NavMesh.AllAreas);
-            return hit;
-        }*/
+            
+            
+            FractureRef.Remove(DestroyedFracture);
+            damageEffectClientRpc();
+
+            //AllowedSimultaneousFractures -= 1;
+            HarbingerLoader.mls.LogMessage("Harbinger Took damage: Destroyed: " + DestroyedFractures + "/"+ NumberOfFracturesToKill);
+            if (DestroyedFractures >= NumberOfFracturesToKill)
+            {
+                KillHarby();
+            }
+
+        }
+
+        [ClientRpc]
+        private void damageEffectClientRpc()
+        {
+            DestroyedFractures += 1;
+            enemyHP--;
+            if (state != HarbingerStates.stunned && stunNormalizedTimer <= 0f && enemyType.canDie)
+            {
+                Smr.materials[0].SetFloat("_Damage", 1f - (float)enemyHP / MaxHealth);
+            }
+        }
+
+        public void KillHarby()
+        {
+            if (!enemyType.canDie)
+            {
+                return;
+            }
+
+            HarbingerLoader.mls.LogMessage("Harbinger has died");
+            KillEnemyServerRpc(false);
+
+            if (state == HarbingerStates.Teleporting)
+            {
+                endEffectsClientRPC();
+            }
+
+            StunClientRpc(true);
+            // destroy all other fractures
+            while(FractureRef.Count > 0)
+            {
+                FractureRef[0].KillEnemy(true);
+                FractureRef.Remove(FractureRef[0]);
+            }
+        }
+        [ClientRpc]
+        public void endEffectsClientRPC()
+        {
+            tpRing.Cancel();
+        }
 
 
+
+
+        public void PlayerTouched(PlayerControllerB  other)
+        {
+            if (RoundManager.Instance.IsHost && teleportOnContact && state != HarbingerStates.stunned)
+            {
+                if (RandomTeleport)
+                {
+                    RandomLocationTeleport(other);
+                }
+                else
+                {
+                    PlayerToMonsterTeleport(other);
+                }
+                
+            }
+        }
+
+        public void RandomLocationTeleport(PlayerControllerB ToTP)
+        {
+            if (!RoundManager.Instance.IsHost)
+            {
+                return;
+            }
+            int tries = 5;
+            while (tries > 0)
+            {
+
+
+                int nextLoc = TeleportRandom.Next(allAINodes.Length);
+                Vector3 ExitPosition = allAINodes[nextLoc].transform.position;
+
+                NavMeshHit hit = FindMoveLocation(ExitPosition, new Vector2(.5f, 1f), 5);
+
+                if (hit.hit)
+                {
+                    if (ToTP.GetComponent<PlayerControllerB>() != null)
+                    {
+                        TeleportPlayerClientRPC(ToTP.playerClientId, hit.position);
+                        //ToTP.GetComponent<PlayerControllerB>().TeleportPlayer(hit.position, true);
+                    }
+                    /*else if(ToTP.GetComponent<EnemyAI>() != null)
+                    {
+                        ToTP.GetComponent<EnemyAI>().TeleportPlayer(hit.position, true);
+                    }*/
+                    break;
+                }
+
+                tries--;
+            }
+
+            
+        }
+        public void PlayerToMonsterTeleport(PlayerControllerB ToTP)
+        {
+            HarbingerLoader.mls.LogInfo("Player teleport triggured");
+            List<EnemyAI> validEnemies = new List<EnemyAI>();
+            foreach (EnemyAI Ai in RoundManager.Instance.SpawnedEnemies)
+            {
+                if (Ai.isOutside == this.isOutside && !Ai.isEnemyDead && Vector3.Distance(Ai.transform.position, transform.position) > 10f)
+                {
+                    validEnemies.Add(Ai);
+                }
+            }
+            if (validEnemies.Count > 0)
+            {
+
+                Vector3 enemypos = validEnemies[UnityEngine.Random.Range(0, validEnemies.Count - 1)].transform.position;
+                Ray r = new Ray(enemypos, Vector3.down);
+                RaycastHit Rhit;
+
+                if (Physics.Raycast(r, out Rhit, 5f))
+                {
+                    enemypos = Rhit.point;
+                }
+
+                NavMeshHit hit = new NavMeshHit();
+                int tries = 0;
+                while (!hit.hit && tries < 10)
+                {
+                    Vector2 RandomPoint = UnityEngine.Random.insideUnitCircle.normalized.normalized * UnityEngine.Random.Range(3, 6);
+                    Vector3 TpPos = enemypos + new Vector3(RandomPoint.x, 0, RandomPoint.y);
+                    //HarbingerLoader.mls.LogInfo("Pos: " + TpPos);
+                    NavMesh.SamplePosition(TpPos, out hit, .5f, NavMesh.AllAreas);
+                    HarbingerLoader.mls.LogInfo("Nav Pos: " + hit.position);
+
+                    tries++;
+                }
+                if (tries < 10)
+                {
+                    TeleportPlayerClientRPC(ToTP.playerClientId, hit.position);
+                    //ToTP.TeleportPlayer(hit.position, false);
+                }
+                else
+                {
+
+                    TeleportPlayerClientRPC(ToTP.playerClientId, ChooseFarthestNodeFromPosition(mainEntrancePosition).position);
+                    
+                }
+
+            }
+            else
+            {
+                TeleportPlayerClientRPC(ToTP.playerClientId, ChooseFarthestNodeFromPosition(mainEntrancePosition).position);
+            }
+        }
+
+
+        [ClientRpc]
+        public void TeleportPlayerClientRPC(ulong playernum, Vector3 pos)
+        {
+            //Vector3 pos = new Vector3(1,2,3);
+            PlayerControllerB Player = StartOfRound.Instance.allPlayerScripts[playernum];
+            if (!Player.IsOwner)
+            {
+                return;
+            }
+            
+            Player.GetComponent<PlayerControllerB>().TeleportPlayer(pos, true);
+        }
     }
 }
