@@ -62,7 +62,7 @@ namespace HarbingerBehaviour.AICode
         private bool TeleportValid = false;
         private bool aligned = false;
         private Quaternion lookRotation;
-        
+        public AudioSource GlobalClientSFXSource;
         
         [Header("TeleportSelf")]
         public Vector2 TeleportSelfArriveRadius = new Vector2(4, 6);
@@ -109,8 +109,8 @@ namespace HarbingerBehaviour.AICode
         public bool RandomTeleport = false;
         public bool teleportOnContact = true;
         public bool CanTeleportSelf = true;
-
-
+        [Header("Misc")]
+        public AudioSource HarbingerHumSource; 
 
         public override void Start()
         {
@@ -192,6 +192,7 @@ namespace HarbingerBehaviour.AICode
             Destroy(PositionBeforeSelfTeleport.gameObject);
             if (!RoundManager.Instance.IsHost)
             {
+                base.OnDestroy();
                 return;
             }
 
@@ -200,7 +201,7 @@ namespace HarbingerBehaviour.AICode
                 FractureRef[0].KillEnemy(true);
                 FractureRef.Remove(FractureRef[0]);
             }
-
+            base.OnDestroy();
         }
 
         public override void DoAIInterval()
@@ -382,7 +383,8 @@ namespace HarbingerBehaviour.AICode
             }
             
             if(state != HarbingerStates.stunned && ( Vector3.Distance(RigidStun.transform.localPosition, prestunTransform) > 0.001f || Quaternion.Angle(RigidStun.transform.localRotation, prestunRot) > 0.001f))
-            {               
+            {
+                postStunInvincibilityTimer = 0.2f;
                 RigidStun.transform.localPosition = Vector3.MoveTowards(RigidStun.transform.localPosition, prestunTransform, .5f*Time.deltaTime);
                 RigidStun.transform.localRotation = Quaternion.RotateTowards(RigidStun.transform.localRotation, prestunRot, 120f * Time.deltaTime);
             }
@@ -660,7 +662,7 @@ namespace HarbingerBehaviour.AICode
                 //rigid
                 prestunTransform = RigidStun.transform.localPosition;
                 prestunRot = RigidStun.transform.localRotation;
-                
+                HarbingerHumSource.Pause();
                 RigidStun.isKinematic = false;                     
                 RigidStun.useGravity = true;
                 
@@ -691,6 +693,7 @@ namespace HarbingerBehaviour.AICode
                     l.enabled = true;
                 }
                 creatureAnimator.speed = LastAnimationSpeed;
+                HarbingerHumSource.Play();
                 //rigid
                 //RigidStun.transform.localPosition = prestunTransform;
                 //RigidStun.transform.localRotation = prestunRot;
@@ -757,6 +760,8 @@ namespace HarbingerBehaviour.AICode
                     SwitchToBehaviourState(3);
                     yield return new WaitForSeconds(.1f);
                     agent.Warp(h.position);
+                    TPSelfClientSnapServerRPC(h.position);
+
                     lastTeleportTime = Time.time;
                     SelfTeleportCooldown = IntialCooldown;
                     if(TPOtherCooldown < 1f)
@@ -774,6 +779,24 @@ namespace HarbingerBehaviour.AICode
             TPSelfBehaviourOverridable = false;
             yield return new WaitForSeconds(.3f);
             NewStateClientRpc(HarbingerStates.Moving);
+        }
+
+
+        [ServerRpc(RequireOwnership = false)]
+        public void TPSelfClientSnapServerRPC(Vector3 pos)
+        {
+            TPSelfClientSnapClientRPC(pos);
+        }
+
+        [ClientRpc]
+        public void TPSelfClientSnapClientRPC(Vector3 pos)
+        {
+            HarbingerLoader.mls.LogInfo("snapping movement");
+            agent.Warp(pos);
+            transform.position = pos;
+            serverPosition = pos;
+            
+
         }
 
 
@@ -926,65 +949,18 @@ namespace HarbingerBehaviour.AICode
         public override void HitEnemy(int force = 1, PlayerControllerB playerWhoHit = null, bool playHitSFX = false, int hitID = -1)
         {
             base.HitEnemy(force,playerWhoHit,playHitSFX, hitID);
-            if (playerWhoHit == null || !playerWhoHit.IsOwner)
+            if (playerWhoHit == null || !playerWhoHit.IsHost)
             {
                 return;
             }
             if (RandomTeleport)
             {
-               RandomLocationTeleport(playerWhoHit);
+               RandomLocationTeleportServerRPC(playerWhoHit.playerClientId);
             }
             else
             {
-                PlayerToMonsterTeleport(playerWhoHit);
+                PlayerToMonsterTeleportServerRPC(playerWhoHit.playerClientId);
             }
-
-            /*List<EnemyAI> validEnemies = new List<EnemyAI>();
-            foreach (EnemyAI Ai in RoundManager.Instance.SpawnedEnemies)
-            {
-                if (Ai.isOutside == this.isOutside && !Ai.isEnemyDead && Vector3.Distance(Ai.transform.position, transform.position) > 10f)
-                {
-                    validEnemies.Add(Ai);
-                }
-            }
-            if(validEnemies.Count > 0)
-            {
-                
-                Vector3 enemypos = validEnemies[UnityEngine.Random.Range(0, validEnemies.Count - 1)].transform.position;
-                Ray r = new Ray(enemypos, Vector3.down);
-                RaycastHit Rhit;
-                
-                if (Physics.Raycast(r, out Rhit, 5f))
-                {
-                    enemypos = Rhit.point;
-                }
-
-                NavMeshHit hit = new NavMeshHit();
-                int tries = 0;
-                while (!hit.hit && tries < 10)
-                {
-                    Vector2 RandomPoint = UnityEngine.Random.insideUnitCircle.normalized.normalized * UnityEngine.Random.Range(3, 6);
-                    Vector3 TpPos = enemypos + new Vector3(RandomPoint.x, 0, RandomPoint.y);
-                    //HarbingerLoader.mls.LogInfo("Pos: " + TpPos);
-                    NavMesh.SamplePosition(TpPos, out hit, .5f, NavMesh.AllAreas);
-                    HarbingerLoader.mls.LogInfo("Nav Pos: " + hit.position);
-
-                    tries++;
-                }
-                if(tries < 10)
-                {
-                    playerWhoHit.TeleportPlayer(hit.position, false);
-                }
-                else
-                {
-                    playerWhoHit.TeleportPlayer(ChooseFarthestNodeFromPosition(mainEntrancePosition).position, false);
-                }
-
-            }
-            else
-            {
-                playerWhoHit.TeleportPlayer(ChooseFarthestNodeFromPosition(mainEntrancePosition).position, false);
-            }*/
             
         }
 
@@ -1128,31 +1104,43 @@ namespace HarbingerBehaviour.AICode
             tpRing.Cancel();
         }
 
+        public override void KillEnemy(bool destroy = false)
+        {
+            if (DestroyedFractures <= NumberOfFracturesToKill)
+            {
+                return;
+            }
+            base.KillEnemy(destroy);
+        }
+
 
 
 
         public void PlayerTouched(PlayerControllerB  other)
         {
-            if (RoundManager.Instance.IsHost && teleportOnContact && state != HarbingerStates.stunned)
+            if (RoundManager.Instance.IsHost && teleportOnContact && state != HarbingerStates.stunned && enemyHP != 0)
             {
                 if (RandomTeleport)
                 {
-                    RandomLocationTeleport(other);
+                    RandomLocationTeleportServerRPC(other.playerClientId);
                 }
                 else
                 {
-                    PlayerToMonsterTeleport(other);
+                    PlayerToMonsterTeleportServerRPC(other.playerClientId);
                 }
                 
             }
         }
 
-        public void RandomLocationTeleport(PlayerControllerB ToTP)
+
+        [ServerRpc(RequireOwnership = false)]
+        public void RandomLocationTeleportServerRPC(ulong ToTP)
         {
             if (!RoundManager.Instance.IsHost)
             {
                 return;
             }
+            HarbingerLoader.mls.LogInfo("Player teleport triggured");
             int tries = 5;
             while (tries > 0)
             {
@@ -1165,9 +1153,10 @@ namespace HarbingerBehaviour.AICode
 
                 if (hit.hit)
                 {
-                    if (ToTP.GetComponent<PlayerControllerB>() != null)
+                    PlayerControllerB Player = StartOfRound.Instance.allPlayerScripts[ToTP];
+                    if (Player.GetComponent<PlayerControllerB>() != null)
                     {
-                        TeleportPlayerClientRPC(ToTP.playerClientId, hit.position);
+                        TeleportPlayerClientRPC(ToTP, hit.position);
                         //ToTP.GetComponent<PlayerControllerB>().TeleportPlayer(hit.position, true);
                     }
                     /*else if(ToTP.GetComponent<EnemyAI>() != null)
@@ -1182,7 +1171,9 @@ namespace HarbingerBehaviour.AICode
 
             
         }
-        public void PlayerToMonsterTeleport(PlayerControllerB ToTP)
+
+        [ServerRpc(RequireOwnership = false)]
+        public void PlayerToMonsterTeleportServerRPC(ulong ToTP)
         {
             HarbingerLoader.mls.LogInfo("Player teleport triggured");
             List<EnemyAI> validEnemies = new List<EnemyAI>();
@@ -1219,20 +1210,23 @@ namespace HarbingerBehaviour.AICode
                 }
                 if (tries < 10)
                 {
-                    TeleportPlayerClientRPC(ToTP.playerClientId, hit.position);
+                    HarbingerLoader.mls.LogInfo("To enemy teleport");
+                    TeleportPlayerClientRPC(ToTP, hit.position);
                     //ToTP.TeleportPlayer(hit.position, false);
                 }
-                else
+                else //if tp fails teleport them to the furthest spot in the maze
                 {
+                    HarbingerLoader.mls.LogInfo("RandomTeleport: failed to target");
 
-                    TeleportPlayerClientRPC(ToTP.playerClientId, ChooseFarthestNodeFromPosition(mainEntrancePosition).position);
+                    TeleportPlayerClientRPC(ToTP, ChooseFarthestNodeFromPosition(mainEntrancePosition).position);
                     
                 }
 
             }
             else
             {
-                TeleportPlayerClientRPC(ToTP.playerClientId, ChooseFarthestNodeFromPosition(mainEntrancePosition).position);
+                HarbingerLoader.mls.LogInfo("RandomTeleport: no monster");
+                TeleportPlayerClientRPC(ToTP, ChooseFarthestNodeFromPosition(mainEntrancePosition).position);
             }
         }
 
@@ -1240,13 +1234,17 @@ namespace HarbingerBehaviour.AICode
         [ClientRpc]
         public void TeleportPlayerClientRPC(ulong playernum, Vector3 pos)
         {
+            HarbingerLoader.mls.LogInfo("playerID: " + playernum + "  " + pos);
             //Vector3 pos = new Vector3(1,2,3);
             PlayerControllerB Player = StartOfRound.Instance.allPlayerScripts[playernum];
             if (!Player.IsOwner)
             {
+                HarbingerLoader.mls.LogInfo("Incorrect Player to teleport");
                 return;
             }
-            
+
+            HarbingerLoader.mls.LogInfo("Nav Pos: " + pos);
+            GlobalClientSFXSource.PlayOneShot(GlobalClientSFXSource.clip);
             Player.GetComponent<PlayerControllerB>().TeleportPlayer(pos, true);
         }
     }

@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Unity.Jobs;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
@@ -21,10 +22,11 @@ namespace HarbingerBehaviour.Items
         GameObject[] allAINodes;
         private System.Random TeleportRandom;
         private System.Random noisemakerRandom;
+        public bool CanBeUsed = true;
 
         private void Awake()
         {
-
+            
         }
 
         public override void Start()
@@ -37,6 +39,11 @@ namespace HarbingerBehaviour.Items
 
         public override void ItemActivate(bool used, bool buttonDown = true)
         {
+            if (!CanBeUsed)
+            {
+                return;
+            }
+
             HarbingerLoader.mls.LogInfo("Item activiated");
             float pitch = (float)noisemakerRandom.Next((int)(.8 * 100f), (int)(1 * 100f)) / 100f;
             UseSource.pitch = pitch;

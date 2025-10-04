@@ -129,12 +129,16 @@ namespace HarbingerBehaviour.AICode
                 }
                 
             }
+                       
+            Teleport.agent.Warp(transform.position);
+            ai.transform.position = transform.position;
+            ai.serverPosition = transform.position;
 
-            if (Teleport.IsOwner)
+            /*if (Teleport.IsOwner)
             {
-                //HarbingerLoader.mls.LogInfo("Teleporting " + Teleport.gameObject.name);
-                Teleport.agent.Warp(transform.position);
-            }
+                /HarbingerLoader.mls.LogInfo("Teleporting " + Teleport.gameObject.name);
+                
+            }*/
             //  postfix
             if (ai is BlobAI)
             {

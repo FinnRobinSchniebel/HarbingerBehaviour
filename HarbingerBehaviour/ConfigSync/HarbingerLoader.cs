@@ -155,6 +155,12 @@ namespace HarbingerBehaviour.ConfigSync
 
             Enemies.RegisterEnemy(VoidHarbinger, SpawnRateLevelType, SpawnRateCustom, TNode, TerminalKeyword);
 
+            /*if (!StartOfRound.Instance.allItemsList.itemsList.Contains(RealityFragment))
+            {
+                StartOfRound.Instance.allItemsList.itemsList.Append(RealityFragment);
+            }*/
+
+            LethalLib.Modules.Items.RegisterItem(RealityFragment);
 
         }
         private static (Dictionary<Levels.LevelTypes, int> spawnRateByLevelType, Dictionary<string, int> spawnRateByCustomLevelType) ConfigParsing(string configMoonRarity)
@@ -197,5 +203,13 @@ namespace HarbingerBehaviour.ConfigSync
             return l;
         }
 
+
+/*
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(StartOfRound), "Awake")]
+        private static void RoundPatchAwake(StartOfRound i)
+        {
+            i.allItemsList.itemsList.Append(RealityFragment);
+        }*/
     }
 }

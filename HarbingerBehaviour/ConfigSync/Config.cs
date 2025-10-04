@@ -3,6 +3,7 @@ using GameNetcodeStuff;
 using HarbingerBehaviour.AICode;
 using HarbingerBehaviour.Items;
 using HarmonyLib;
+using JetBrains.Annotations;
 using LethalLib;
 using System;
 using System.Collections.Generic;
@@ -39,15 +40,18 @@ namespace HarbingerBehaviour.ConfigSync
         public ConfigItem<float> RealityFractureChance;
         public ConfigItem<int> MinFractureValue;
         public ConfigItem<int> MaxFractureValue;
+        public ConfigItem<bool> CanUseItem;
         public ConfigItem<int> FractureCooldown;
         public ConfigItem<int> FractureDamageDelt;
+        public ConfigItem<int> FractureWeight;
+        
 
         public ConfigItem<bool> HarbingerCanDie;
         public ConfigItem<int> HarbingerHealth;
 
         public ConfigItem<bool> TeleportRandom;
         public ConfigItem<bool> TpOnHarbingerTouch;
-
+        
 
         public Config()
         {
@@ -80,11 +84,14 @@ namespace HarbingerBehaviour.ConfigSync
             RealityFractureChance = cfg.Bind("Reality Fracture", "Drop Chance", defaultValue: 0.3f, "How Frequantly a Reality Fracture item should be dropped from Space Fractures (0 for disabled and 1 for always)");
             MinFractureValue = cfg.Bind("Reality Fracture", "Min Value", defaultValue: 50, "The lowest a dropped fragment should be worth");
             MaxFractureValue = cfg.Bind("Reality Fracture", "Max Value", defaultValue: 100, "The highest a dropped fragment should be worth");
+            CanUseItem = cfg.Bind("Reality Fracture", "CanUseItem", defaultValue: true, "If the item can be used to teleport the player");
             FractureCooldown = cfg.Bind("Reality Fracture", "Reality Fracture Cooldown", defaultValue: 60, "The cooldown of using a Reality fracture to teleport (in seconds)");
             FractureDamageDelt = cfg.Bind("Reality Fracture", "Fracture Self Damage", defaultValue: 20, "The amount of damage a fracture should do to a player when used");
+            FractureWeight = cfg.Bind("Reality Fracture", "Fracture Weight", defaultValue: 20, "Weight of the item in pounds");
 
             MaxCount = cfg.Bind("Spawning", "Maximum Harbingers", defaultValue: 1, "What is the maximum number of harbingers that should be able to spawn (defaut 1)");
             HarbingerSpawnLocations = cfg.Bind("Spawning", "Moon Spawn Weight", "Modded:35,ExperimentationLevel:10,AssuranceLevel:10,VowLevel:10,OffenseLevel:20,MarchLevel:20,RendLevel:40,DineLevel:40,TitanLevel:50,AdamanceLevel:20,EmbrionLevel:20,ArtificeLevel:50", "Rarety of Harbinger spawning on Each Moon (works will LLL as well).");
+
 
             TeleportRandom = cfg.Bind("Misc", "Change retaliate to TP random", false, "If set will teleport the player to a random location if touched or attacked, instead of teleporting them to enemies.");
             TpOnHarbingerTouch = cfg.Bind("Misc", "TP On Touch", true, "If set will teleport players on physical contatct with a harbinger instead of just when attacked.");
@@ -216,10 +223,23 @@ namespace HarbingerBehaviour.ConfigSync
             spaceFractureEnemy.enemyType.stunGameDifficultyMultiplier = Instance.ShockDifficulty.Value;
             spaceFractureEnemy.dropChance = Instance.RealityFractureChance.Value;
 
-            HarbingerLoader.RealityFragment.minValue = Instance.MinFractureValue.Value;
-            HarbingerLoader.RealityFragment.maxValue = Instance.MaxFractureValue.Value;
+            int max = Instance.MaxFractureValue.Value;
+            int min = Instance.MinFractureValue.Value;
+
+            if(Instance.MinFractureValue.Value > Instance.MaxFractureValue.Value)
+            {
+                int t = max;
+                max = min;
+                min = t;
+            }
+
+
+            HarbingerLoader.RealityFragment.minValue = min;
+            HarbingerLoader.RealityFragment.maxValue = max;
+            HarbingerLoader.RealityFragment.weight = (float)(Instance.FractureWeight.Value / 105f) + 1f;
             HarbingerLoader.RealityFragment.spawnPrefab.GetComponent<RealityFracture>().useCooldown = Instance.FractureCooldown.Value;
             HarbingerLoader.RealityFragment.spawnPrefab.GetComponent<RealityFracture>().DamagePlayer = Instance.FractureDamageDelt.Value;
+            HarbingerLoader.RealityFragment.spawnPrefab.GetComponent<RealityFracture>().CanBeUsed = Instance.CanUseItem.Value;
 
             HarbingerLoader.mls.LogInfo("Item cooldown: " + HarbingerLoader.RealityFragment.spawnPrefab.GetComponent<RealityFracture>().useCooldown);
             HarbingerLoader.mls.LogInfo("Config Item  cooldown: " + HarbingerLoader.RealityFragment.spawnPrefab.GetComponent<RealityFracture>().useCooldown);
