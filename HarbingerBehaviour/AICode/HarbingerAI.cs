@@ -67,10 +67,12 @@ namespace HarbingerBehaviour.AICode
         [Header("TeleportSelf")]
         public Vector2 TeleportSelfArriveRadius = new Vector2(4, 6);
         public float SelfTeleportCooldown = 40f;
+        
         public AudioSource PositionBeforeSelfTeleport;
         private float lastTeleportTime = 0.0f;
         private List<EnemyAI> Alreadyused = new List<EnemyAI>();
-        private float IntialCooldown;
+        private float MinSelfCooldown;
+        private float MaxSelfCooldown;
         private bool TPSelfBehaviourOverridable = false;
 
 
@@ -170,14 +172,17 @@ namespace HarbingerBehaviour.AICode
                 }
             }
             HarbingerLoader.mls.LogInfo($"Picked : {grabbableObjectsInMap.Count}");
+
         }
 
         public void HostConfigApply(float tpSpeedMult, float teleportSelfCooldown, float teleportOthersCooldown)
         {
             creatureAnimator.SetFloat("TeleportMultipier", tpSpeedMult);
             //cooldowns
-            SelfTeleportCooldown = teleportSelfCooldown;
-            IntialCooldown = SelfTeleportCooldown;
+            SelfTeleportCooldown = teleportSelfCooldown;           
+
+            MinSelfCooldown = SelfTeleportCooldown;
+            MaxSelfCooldown = Math.Max(teleportOthersCooldown, SyncedInstance<Config>.Instance.TPSelfCooldownMax.Value);
 
             TPOtherCooldown = teleportOthersCooldown;
             TPOtherInitCooldown = TPOtherCooldown;
@@ -763,7 +768,7 @@ namespace HarbingerBehaviour.AICode
                     TPSelfClientSnapServerRPC(h.position);
 
                     lastTeleportTime = Time.time;
-                    SelfTeleportCooldown = IntialCooldown;
+                    SelfTeleportCooldown = UnityEngine.Random.Range(MinSelfCooldown, MaxSelfCooldown);
                     if(TPOtherCooldown < 1f)
                     {
                         TPOtherCooldown = 1f;
@@ -1106,11 +1111,12 @@ namespace HarbingerBehaviour.AICode
 
         public override void KillEnemy(bool destroy = false)
         {
-            if (DestroyedFractures <= NumberOfFracturesToKill)
+            if (DestroyedFractures < NumberOfFracturesToKill)
             {
                 return;
             }
             base.KillEnemy(destroy);
+
         }
 
 

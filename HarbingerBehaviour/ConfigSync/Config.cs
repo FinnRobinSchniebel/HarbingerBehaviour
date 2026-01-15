@@ -22,6 +22,7 @@ namespace HarbingerBehaviour.ConfigSync
         [NonSerialized]
         public ConfigItem<float> TeleportSpeed;
         public ConfigItem<float> TPSelfCooldown;
+        public ConfigItem<float> TPSelfCooldownMax;
         public ConfigItem<float> TPOtherCooldown;
         public ConfigItem<int> MaxCount;
         public ConfigItem<string> HarbingerSpawnLocations;
@@ -33,6 +34,7 @@ namespace HarbingerBehaviour.ConfigSync
         public ConfigItem<bool> CanTeleportSelf;
 
         public ConfigItem<bool> CanCreateFractures;
+        public ConfigItem<bool> CreateFractureOnEnemyTP;
         public ConfigItem<int> SimultaneousFractures;
         public ConfigItem<float> StunDuration;
         public ConfigItem<float> ShockDifficulty;
@@ -44,6 +46,7 @@ namespace HarbingerBehaviour.ConfigSync
         public ConfigItem<int> FractureCooldown;
         public ConfigItem<int> FractureDamageDelt;
         public ConfigItem<int> FractureWeight;
+
         
 
         public ConfigItem<bool> HarbingerCanDie;
@@ -74,9 +77,11 @@ namespace HarbingerBehaviour.ConfigSync
             CanTPItems = cfg.Bind("Teleport Items", "Can Teleport Items", defaultValue: true, "This allows you to turn off the ability to teleport the apparatus.");
 
             CanTeleportSelf = cfg.Bind("Teleport Self", "Can TP Self", defaultValue: true, "Can the harbinger teleport itself to players.");
-            TPSelfCooldown = cfg.Bind("Teleport Self", "Teleport Self Cooldown", defaultValue: 20f, "How frequantly should the harbinger teleport to players (default 20 sec). Minimum of 5 seconds");
+            TPSelfCooldown = cfg.Bind("Teleport Self", "Teleport Self Cooldown Min", defaultValue: 30f, "The Minimum frequantly at which harbingers can self teleport to players (default 25 sec). Minimum of 5 seconds");
+            TPSelfCooldownMax = cfg.Bind("Teleport Self", "Teleport Self Cooldown Max", defaultValue: 45f, "The maximum frequantly at which harbingers can self teleport (default 40 sec). Minimum of 5 seconds");
 
             CanCreateFractures = cfg.Bind("Harbinger Space Fracture", "Can Create Space Fractures", defaultValue: true, "Harbingers can spawn Fractures on teleport if enabled. Note: if disabled harbingers can't die. If enabled but teleport self isn't, it will create fractures on teleporting enemies.");
+            CreateFractureOnEnemyTP = cfg.Bind("Harbinger Space Fracture", "Can Create Space Fractures on enemy TP", defaultValue: false, "If set to true harbingers will spawn fractures when teleporting enemies to you. (Independed from 'Can Create Space Fractures'");
             SimultaneousFractures = cfg.Bind("Harbinger Space Fracture", "Max Simultaneous Fractures", defaultValue: 3, "How many fractures can a Harbinger have active at the same time.");
             StunDuration = cfg.Bind("Harbinger Space Fracture", "Fracture stun Duration", defaultValue: 4f, "How long a fracture needs to be stunned for it to break");
             ShockDifficulty = cfg.Bind("Harbinger Space Fracture", "Fracture stun Difficulty", defaultValue: 1.2f, "How hard the zap-gun minigame is when attacking a fracture. (1.1 is easy, 1.5+ is hard)");

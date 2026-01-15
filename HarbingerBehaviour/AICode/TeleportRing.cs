@@ -10,6 +10,7 @@ using UnityEngine;
 using static UnityEngine.GraphicsBuffer;
 using UnityEngine.AI;
 using HarmonyLib;
+using HarbingerBehaviour.ConfigSync;
 
 namespace HarbingerBehaviour.AICode
 {
@@ -42,7 +43,7 @@ namespace HarbingerBehaviour.AICode
             Quaternion rot = Teleport.transform.rotation;
             TeleportCreature(Teleport);
 
-            if(!HarbingerOwner.CanTeleportSelf && HarbingerOwner.CanCreateFractures && RoundManager.Instance.IsHost)
+            if(((!HarbingerOwner.CanTeleportSelf && HarbingerOwner.CanCreateFractures) || SyncedInstance<Config>.Instance.CreateFractureOnEnemyTP.Value) && RoundManager.Instance.IsHost)
             {
                 HarbingerOwner.CreateFracture(EnemyLocation, rot, Teleport.transform.position);
             }
